@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SimpCity Enlarge Image
 // @namespace    https://github.com/vylix-dev/simpcity-enlarge-image
-// @version      1.0.0
+// @version      1.0.1
 // @description  Expand embedded SimpCity thumbnail images inline instead of opening external image links.
 // @author       vylix-dev
 // @license      MIT

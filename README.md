@@ -21,7 +21,10 @@ Keep `@version` in `simpcity-enlarge-image.user.js`, `simpcity-enlarge-image.met
 
 - Intercepts clicks on embedded `img.bbImage` thumbnails on SimpCity.
 - Expands `.md` and `.th` thumbnail URLs to their full image URL inline inside the thread.
+- Expands Pixhost `t*.pixhost.to/thumbs/...` thumbnail URLs to their full `img*.pixhost.to/images/...` image URLs.
+- Falls back to expanding the current embedded image URL when no host-specific full image pattern is known.
 - Prevents normal image clicks from opening the external image link.
+- Smoothly animates inline expand/collapse states.
 - Clicks the expanded image again to collapse it back to the embedded thumbnail layout.
 - Watches dynamically inserted thread content so lazy-loaded images are handled too.
 

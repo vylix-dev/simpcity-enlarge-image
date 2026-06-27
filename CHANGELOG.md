@@ -12,6 +12,11 @@ All notable changes to SimpCity Enlarge Image are documented here. This file is 
 
 ### Security
 
+## [1.0.1] - 2026-06-27
+
+### Changed
+- Added Pixhost thumbnail expansion and smoothed inline image resizing.
+
 ## [1.0.0] - 2026-06-27
 
 ### Added

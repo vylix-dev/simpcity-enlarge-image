@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SimpCity Enlarge Image
 // @namespace    https://github.com/vylix-dev/simpcity-enlarge-image
-// @version      1.0.0
+// @version      1.0.1
 // @description  Expand embedded SimpCity thumbnail images inline instead of opening external image links.
 // @author       vylix-dev
 // @license      MIT
@@ -32,10 +32,36 @@
   const IMAGE_SELECTOR = 'img.bbImage';
   const IMAGE_URL_PATTERN = /\.(?:avif|gif|jpe?g|png|webp)(?:[?#].*)?$/i;
   const THUMBNAIL_URL_PATTERN = /\.(?:md|th)\.(avif|gif|jpe?g|png|webp)(?=($|[?#]))/i;
+  const PIXHOST_THUMBNAIL_URL_PATTERN = /^https?:\/\/t(\d+)\.pixhost\.to\/thumbs\/([^/]+)\/([^?#]+)([?#].*)?$/i;
+  const COLLAPSE_ANIMATION_MS = 150;
+  const collapseTimers = new WeakMap();
 
   const CSS = String.raw`
+    @keyframes scie-expand-image {
+      from {
+        opacity: 0.72;
+        transform: scale(0.965);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes scie-collapse-image {
+      from {
+        opacity: 1;
+        transform: scale(1);
+      }
+      to {
+        opacity: 0.72;
+        transform: scale(0.965);
+      }
+    }
+
     img.bbImage.scie-image {
       cursor: zoom-in !important;
+      transform-origin: center center !important;
     }
 
     a.scie-link {
@@ -52,15 +78,25 @@
       object-fit: contain !important;
       cursor: zoom-out !important;
       background: #050505 !important;
-      box-shadow:
-        0 0 0 1px rgba(255, 85, 85, 0.48),
-        0 0 0 4px rgba(0, 0, 0, 0.45) !important;
+      box-shadow: none !important;
+      animation: scie-expand-image 180ms cubic-bezier(0.22, 1, 0.36, 1) both !important;
+    }
+
+    img.bbImage.scie-collapsing {
+      animation: scie-collapse-image 150ms cubic-bezier(0.55, 0, 1, 0.45) both !important;
     }
 
     a.scie-link:has(img.scie-expanded) {
       display: block !important;
       max-width: 100% !important;
       cursor: zoom-out !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      img.bbImage.scie-expanded,
+      img.bbImage.scie-collapsing {
+        animation: none !important;
+      }
     }
   `;
 
@@ -77,8 +113,20 @@
     return String(value || '').replace(/\.(?:md|th)(?=\.(?:avif|gif|jpe?g|png|webp)(?:$|[?#]))/i, '');
   }
 
+  function getPixhostLargeImageUrl(value) {
+    const match = String(value || '').match(PIXHOST_THUMBNAIL_URL_PATTERN);
+    if (!match) return '';
+
+    const [, shard, folder, fileName, suffix = ''] = match;
+    return `https://img${shard}.pixhost.to/images/${folder}/${fileName}${suffix}`;
+  }
+
   function getLargeImageUrl(value) {
-    return String(value || '').replace(THUMBNAIL_URL_PATTERN, '.$1');
+    const url = String(value || '');
+    const pixhostUrl = getPixhostLargeImageUrl(url);
+    if (pixhostUrl) return pixhostUrl;
+
+    return url.replace(THUMBNAIL_URL_PATTERN, '.$1');
   }
 
   function imageUrlFromAnchor(img) {
@@ -94,7 +142,11 @@
     const largeUrl = getLargeImageUrl(thumbnailUrl);
 
     if (largeUrl && largeUrl !== thumbnailUrl) return largeUrl;
-    return imageUrlFromAnchor(img);
+
+    const anchorImageUrl = imageUrlFromAnchor(img);
+    if (anchorImageUrl) return anchorImageUrl;
+
+    return IMAGE_URL_PATTERN.test(thumbnailUrl) ? thumbnailUrl : '';
   }
 
   function rememberOriginalImageState(img) {
@@ -150,11 +202,18 @@
   }
 
   function expandImage(img) {
+    const collapseTimer = collapseTimers.get(img);
+    if (collapseTimer) {
+      window.clearTimeout(collapseTimer);
+      collapseTimers.delete(img);
+    }
+
     const largeUrl = img.dataset.scieLargeSrc || getExpandableUrl(img);
     if (!largeUrl) return;
 
     rememberOriginalImageState(img);
     img.dataset.scieLargeSrc = largeUrl;
+    img.classList.remove('scie-collapsing');
     img.classList.add('scie-expanded');
     img.dataset.scieExpanded = 'true';
     img.src = largeUrl;
@@ -164,10 +223,18 @@
   }
 
   function collapseImage(img) {
-    img.classList.remove('scie-expanded');
-    delete img.dataset.scieExpanded;
-    restoreThumbnail(img);
-    img.title = 'Click to expand image inline';
+    if (collapseTimers.has(img)) return;
+
+    img.classList.add('scie-collapsing');
+    const timer = window.setTimeout(() => {
+      img.classList.remove('scie-expanded', 'scie-collapsing');
+      delete img.dataset.scieExpanded;
+      restoreThumbnail(img);
+      img.title = 'Click to expand image inline';
+      collapseTimers.delete(img);
+    }, COLLAPSE_ANIMATION_MS);
+
+    collapseTimers.set(img, timer);
   }
 
   function toggleImage(img) {
